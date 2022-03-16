@@ -26,6 +26,7 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 
 from reshape import reshape_model
+import wandb
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -93,13 +94,25 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
 
+parser.add_argument('--model-category', type=str, default='', required=True, 
+				help='type of model we are training e.g. beverage')
+
+parser.add_argument('--model-version', type=str, default='', required=True,
+				help='version of the model number')
+
+parser.add_argument('--iteration-number', type=str, default='1',
+				help='iteration number while training')
+
+parser.add_argument('--notes', type=str, default='1',
+				help='Any optional notes. e.g. Tried data augmentation with this this and this details or options')
+
 best_acc1 = 0
 
 
 #
 # initiate worker threads (if using distributed multi-GPU)
 #
-def main():
+def main(run):
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -134,7 +147,6 @@ def main():
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
 
-
 #
 # worker thread (per-GPU)
 #
@@ -160,6 +172,16 @@ def main_worker(gpu, ngpus_per_node, args):
     valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
+
+    # artifact = wandb.Artifact(traindir,'classification' + args.model_category, type=args.category)
+    # # artifact.add_dir(traindir)
+    # artifact.add_dir(valdir)
+    # run.log_artifact(artifact)
+
+    artifact = wandb.Artifact(args.model_category, type='dataset')
+    artifact.add_dir(traindir)
+    artifact.add_dir(valdir)
+    run.log_artifact(artifact)  
 
     train_dataset = datasets.ImageFolder(
         traindir,
@@ -273,11 +295,27 @@ def main_worker(gpu, ngpus_per_node, args):
         # decay the learning rate
         adjust_learning_rate(optimizer, epoch, args)
 
+        print('wandb config is being set',optimizer.param_groups[0]['lr'],args.epochs, epoch + 1, args.batch_size)
+        wandb.config = {
+            "learning_rate":optimizer.param_groups[0]['lr'],
+            "epochs":args.epochs,
+            "epoch":epoch + 1,
+            "batch_size":args.batch_size,
+            'arch': args.arch,
+            'resolution': args.resolution,
+            'num_classes': num_classes,
+            'state_dict': model.state_dict(),
+            'best_acc1': best_acc1,
+            'optimizer' : optimizer.state_dict(),
+        }
+        print('wandb config has been set')
+
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, num_classes, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, num_classes, args)
+        print('acc1',acc1)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -336,6 +374,8 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, args):
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
 
+        
+
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -347,6 +387,17 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, args):
 
         if i % args.print_freq == 0:
             progress.display(i)
+            print(top1,top5,time.time() - end,loss.item())
+        wandb.log({
+            "acc1":top1.val,
+            "acc1_avg":top1.avg,
+            "acc5":top5.val,
+            "acc5_avg":top5.avg,
+            "loss":loss.item(),
+        })
+
+        #  precision , recall,  f1, pr, 
+    
     
     print("Epoch: [{:d}] completed, elapsed time {:6.3f} seconds".format(epoch, time.time() - epoch_start))
 
@@ -503,4 +554,15 @@ def accuracy(output, target, topk=(1,)):
 
 
 if __name__ == '__main__':
-    main()
+    args = parser.parse_args()
+    print(args)
+    run = wandb.init(
+        name= "classification_{}_{}_{}".format(args.model_category,args.model_version,args.iteration_number),
+        notes= "classification_{}_{}_{} was trained on {}. {}".format(args.model_category, args.model_version, args.iteration_number, str(time.time()), args.notes or ""),
+        project= "my-test-project",
+        entity= "abhianify",
+        tags= ["classification", args.model_category, args.model_version, args.iteration_number],
+        save_code= True
+        )
+    main(run)
+    
