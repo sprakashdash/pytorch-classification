@@ -2,6 +2,10 @@
 
 This implements training of popular model architectures, such as ResNet, AlexNet, and VGG on the ImageNet dataset.
 
+## :rocket: Update Mar 22, 2022 [Added Visualization support for Multi-GPU Training with [wandb](https://wandb.ai/site)]
+- Install wandb through pip
+- `pip install wandb`
+
 ## Requirements
 
 - Install PyTorch ([pytorch.org](http://pytorch.org))
