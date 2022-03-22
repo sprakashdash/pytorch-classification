@@ -4,7 +4,7 @@ This implements training of popular model architectures, such as ResNet, AlexNet
 
 ## :rocket: Update Mar 22, 2022 [Added Visualization support for Multi-GPU Training with [wandb](https://wandb.ai/site)]
 - Install wandb through pip
-- `pip install wandb`
+- `pip install wandb` or just run `pip install -r requirements.txt`
 
 ## Requirements
 
