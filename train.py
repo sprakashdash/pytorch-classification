@@ -393,10 +393,10 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, args, l
     target_batch = torch.cat(target_batch, dim=0)
     output_batch = torch.cat(output_batch, dim=0)
     wandb.log({
-        "TRAIN/pr": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
-                                        output_batch.detach().cpu().numpy(), 
-                                        labels=dataset.classes, 
-                                        title="Train Precision-Recall Curve")
+        "TRAIN/PR Curve": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
+                                              output_batch.detach().cpu().numpy(), 
+                                              labels=dataset.classes, 
+                                              title="Train Precision-Recall Curve")
     })
 
     print("Epoch: [{:d}] completed, elapsed time {:6.3f} seconds".format(epoch, time.time() - epoch_start))
@@ -460,19 +460,15 @@ def validate(val_loader, model, criterion, num_classes, args, logger, dataset):
         output_batch = torch.cat(output_batch, dim=0)
         
         wandb.log({
-            "VALID/pr": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
-                                            output_batch.detach().cpu().numpy(), 
-                                            labels=dataset.classes, 
-                                            title="Train Precision-Recall Curve")
+            "VALID/PR Curve": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
+                                                  output_batch.detach().cpu().numpy(), 
+                                                  labels=dataset.classes, 
+                                                  title="Train Precision-Recall Curve")
         })
 
-        # print(output_batch.detach().cpu().numpy(), np.argmax(output_batch.detach().cpu().numpy(), axis=1))
-        # print(target_batch.detach().cpu().numpy(), np.argmax(target_batch.detach().cpu().numpy()))
-        # raise
         wandb.log({
             "VALID/Confusion Marix" : wandb.plot.confusion_matrix(probs=output_batch.detach().cpu().numpy(),
                                                                   y_true=target_batch.detach().cpu().numpy(), 
-                                                                #   preds=np.argmax(output_batch.detach().cpu().numpy(), axis=1),
                                                                   class_names=dataset.classes)
         })
 
