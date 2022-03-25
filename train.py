@@ -14,6 +14,7 @@ import shutil
 import time
 import warnings
 import git
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -67,7 +68,7 @@ parser.add_argument('--resolution', default=224, type=int, metavar='N',
                          'note than Inception models should use 299x299')
 parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
-parser.add_argument('--epochs', default=3, type=int, metavar='N',
+parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -117,12 +118,6 @@ best_acc1 = 0
 #
 def main():
     args = parser.parse_args()
-
-    # writer = SummaryWriter(log_dir=f"runs/{run_name}")
-    # writer.add_text(
-    #     "hyperparameters",
-    #     "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    # )
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -305,10 +300,10 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, num_classes, args, wandb_tracking)
+        train(train_loader, model, criterion, optimizer, epoch, num_classes, args, wandb_tracking, train_dataset)
         # raise
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, num_classes, args, wandb_tracking)
+        acc1 = validate(val_loader, model, criterion, num_classes, args, wandb_tracking, train_dataset)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -330,7 +325,7 @@ def main_worker(gpu, ngpus_per_node, args):
 #
 # train one epoch
 #
-def train(train_loader, model, criterion, optimizer, epoch, num_classes, args, logger):
+def train(train_loader, model, criterion, optimizer, epoch, num_classes, args, logger, dataset):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -400,10 +395,9 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, args, l
     wandb.log({
         "TRAIN/pr": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
                                         output_batch.detach().cpu().numpy(), 
-                                        labels=["Cloudy", "Sunny"], 
+                                        labels=dataset.classes, 
                                         title="Train Precision-Recall Curve")
     })
-
 
     print("Epoch: [{:d}] completed, elapsed time {:6.3f} seconds".format(epoch, time.time() - epoch_start))
 
@@ -411,7 +405,7 @@ def train(train_loader, model, criterion, optimizer, epoch, num_classes, args, l
 #
 # measure model performance across the val dataset
 #
-def validate(val_loader, model, criterion, num_classes, args, logger):
+def validate(val_loader, model, criterion, num_classes, args, logger, dataset):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -468,13 +462,28 @@ def validate(val_loader, model, criterion, num_classes, args, logger):
         wandb.log({
             "VALID/pr": wandb.plot.pr_curve(target_batch.detach().cpu().numpy(), 
                                             output_batch.detach().cpu().numpy(), 
-                                            labels=["Cloudy", "Sunny"], 
+                                            labels=dataset.classes, 
                                             title="Train Precision-Recall Curve")
         })
 
+        # print(output_batch.detach().cpu().numpy(), np.argmax(output_batch.detach().cpu().numpy(), axis=1))
+        # print(target_batch.detach().cpu().numpy(), np.argmax(target_batch.detach().cpu().numpy()))
+        # raise
+        wandb.log({
+            "VALID/Confusion Marix" : wandb.plot.confusion_matrix(probs=output_batch.detach().cpu().numpy(),
+                                                                  y_true=target_batch.detach().cpu().numpy(), 
+                                                                #   preds=np.argmax(output_batch.detach().cpu().numpy(), axis=1),
+                                                                  class_names=dataset.classes)
+        })
+
+        wandb.log({
+            "VALID/ROC" : wandb.plot.roc_curve(y_true=target_batch.detach().cpu().numpy(), 
+                                               y_probas=output_batch.detach().cpu().numpy(), 
+                                               labels=dataset.classes)
+        })
+
         # TODO: this should also be done with the ProgressMeter
-        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-              .format(top1=top1, top5=top5))
+        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
 
     return top1.avg
 
